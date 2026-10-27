@@ -38,6 +38,7 @@ CATEGORY_SYSLOG = "syslog"
 CATEGORY_SERVICE = "service"
 CATEGORY_SYSTEM = "system"
 CATEGORY_DB = "db"
+CATEGORY_HTTP = "http"
 
 VALID_CATEGORIES = (
     CATEGORY_AUTH,
@@ -46,6 +47,7 @@ VALID_CATEGORIES = (
     CATEGORY_SERVICE,
     CATEGORY_SYSTEM,
     CATEGORY_DB,
+    CATEGORY_HTTP,
 )
 
 # Human readable name for each contract category (used in attributes and logs).
@@ -56,6 +58,7 @@ CATEGORY_TO_LOG_DOMAIN = {
     CATEGORY_SERVICE: "service",
     CATEGORY_SYSTEM: "event log",
     CATEGORY_DB: "database",
+    CATEGORY_HTTP: "http",
 }
 
 SEVERITY_RANK = {"info": 0, "warning": 1, "error": 2, "critical": 3}
@@ -259,6 +262,35 @@ _LINUX_RULES: tuple[LinuxRule, ...] = (
         prefixes=("audit",),
         message=_AUDIT_MESSAGE_PATTERNS,
         transport=frozenset({"audit"}),
+    ),
+    LinuxRule(
+        name="linux.http",
+        category=CATEGORY_HTTP,
+        type="http_request",
+        priority=95,
+        exact=frozenset(
+            {
+                "nginx",
+                "apache",
+                "apache2",
+                "httpd",
+                "caddy",
+                "envoy",
+                "traefik",
+                "web-api",
+                "web",
+            }
+        ),
+        prefixes=(
+            "nginx",
+            "apache",
+            "httpd",
+            "caddy",
+            "envoy",
+            "traefik",
+            "web-api",
+            "web",
+        ),
     ),
     LinuxRule(
         name="linux.database",
@@ -469,7 +501,16 @@ def _refine_linux_type(category: str, message: str, fallback: str) -> str:
             return "vpn_event"
         return "network_event"
 
+    if category == CATEGORY_HTTP:
+        if re.search(r"(?i)\b(500|502|503|504|5xx)\b", text):
+            return "http_5xx"
+        if re.search(r"(?i)\b(400|401|403|404|4xx)\b", text):
+            return "http_4xx"
+        return "http_request"
+
     if category == CATEGORY_SERVICE:
+        if re.search(r"(?i)\b(restart|restarting|killed|exit.*status=9)\b", text):
+            return "service_restart"
         if re.search(r"(?i)\bfailed|failure|Main process exited", text):
             return "service_failure"
         if re.search(r"(?i)\b(Started|Starting|Activating)\b", text):
