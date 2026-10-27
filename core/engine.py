@@ -264,7 +264,7 @@ class BatchSender:
 
     def _serialize(self, events: List[Event]) -> bytes:
         return json.dumps(
-            [asdict(event) for event in events],
+            {"events": [asdict(event) for event in events]},
             separators=(",", ":"),
             default=str,
         ).encode("utf-8")
@@ -273,15 +273,17 @@ class BatchSender:
         """Split into batches under the 256 KB contract limit."""
         chunks: List[List[Event]] = []
         current: List[Event] = []
-        current_size = 2  # "[]"
+        envelope_overhead = len(b'{"events":[]}')
+        current_size = envelope_overhead
 
         for event in events:
-            event_size = len(self._serialize([event]))
+            single_payload = json.dumps(asdict(event), separators=(",", ":"), default=str).encode("utf-8")
+            event_size = len(single_payload)
             if current and current_size + event_size + 1 > self.max_batch_bytes:
                 chunks.append(current)
                 current = []
-                current_size = 2
-            if event_size > self.max_batch_bytes:
+                current_size = envelope_overhead
+            if event_size + envelope_overhead > self.max_batch_bytes:
                 logging.warning(
                     "Single event %s is larger than the batch limit (%d bytes); "
                     "sending it alone.",

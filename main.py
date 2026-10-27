@@ -14,11 +14,28 @@ import sys
 from . import StreamMerger, get_stream_factories
 from .core.engine import BatchSender, BoundedBuffer, Flusher, Redactor
 
+DEFAULT_AWS_ENDPOINT = "https://d6l60no0kk.execute-api.eu-north-1.amazonaws.com/api/v1/events/batch"
+
+
+def _resolve_collector_token() -> str:
+    token = os.getenv("LAD_COLLECTOR_TOKEN", "")
+    if token and token != "dev-secret-token":
+        return token
+    tokens_file = os.path.expanduser("~/.config/lad/dev-tokens")
+    if os.path.exists(tokens_file):
+        try:
+            with open(tokens_file, "r") as f:
+                for line in f:
+                    if line.startswith("COLLECTOR_TOKEN="):
+                        return line.strip().split("=", 1)[1]
+        except Exception:
+            pass
+    return token or "dev-secret-token"
+
+
 # Configurable settings (override with environment variables).
-API_ENDPOINT = os.getenv(
-    "LAD_COLLECTOR_ENDPOINT", "http://localhost:8080/api/v1/events/batch"
-)
-AUTH_TOKEN = os.getenv("LAD_COLLECTOR_TOKEN", "dev-secret-token")
+API_ENDPOINT = os.getenv("LAD_COLLECTOR_ENDPOINT", DEFAULT_AWS_ENDPOINT)
+AUTH_TOKEN = _resolve_collector_token()
 FLUSH_INTERVAL_SECONDS = float(os.getenv("LAD_FLUSH_INTERVAL_SECONDS", "3"))
 BATCH_MAX_SIZE = int(os.getenv("LAD_MAX_BATCH_EVENTS", "100"))
 BUFFER_MAX_EVENTS = int(os.getenv("LAD_BUFFER_MAX_EVENTS", "2000"))
