@@ -14,7 +14,9 @@ import sys
 from . import StreamMerger, get_stream_factories
 from .core.engine import BatchSender, BoundedBuffer, Flusher, Redactor
 
-DEFAULT_AWS_ENDPOINT = "https://d6l60no0kk.execute-api.eu-north-1.amazonaws.com/api/v1/events/batch"
+DEFAULT_AWS_ENDPOINT = (
+    "https://d6l60no0kk.execute-api.eu-north-1.amazonaws.com/api/v1/events/batch"
+)
 
 
 def _resolve_collector_token() -> str:

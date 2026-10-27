@@ -103,12 +103,12 @@ def _parse_system_time(value: Any) -> Optional[str]:
 
 def _legacy_level(event_type: Optional[int]) -> int:
     if event_type == 1:
-        return 2       # error
+        return 2  # error
     if event_type == 2:
-        return 3       # warning
+        return 3  # warning
     if event_type == 16:
-        return 3       # audit failure
-    return 4           # information
+        return 3  # audit failure
+    return 4  # information
 
 
 def _close_handle(handle: Any) -> None:
@@ -145,13 +145,19 @@ def _parse_event_xml(xml: str) -> Optional[dict[str, Any]]:
 
     def system_text(tag: str) -> Optional[str]:
         element = system.find(q(tag))
-        return (element.text or "").strip() if element is not None and element.text else None
+        return (
+            (element.text or "").strip()
+            if element is not None and element.text
+            else None
+        )
 
     provider_element = system.find(q("Provider"))
     time_element = system.find(q("TimeCreated"))
     event_id_element = system.find(q("EventID"))
 
-    event_id = _int(event_id_element.text if event_id_element is not None else None) or 0
+    event_id = (
+        _int(event_id_element.text if event_id_element is not None else None) or 0
+    )
     provider = provider_element.get("Name") if provider_element is not None else ""
     time_created = time_element.get("SystemTime") if time_element is not None else None
 
@@ -191,9 +197,7 @@ def _translate_subscribe_error(exc: BaseException, channel: str) -> BaseExceptio
             "(the Security channel requires elevation)."
         )
     if code in _CHANNEL_NOT_FOUND_CODES:
-        return UnavailableSource(
-            f"channel '{channel}' is not available on this host."
-        )
+        return UnavailableSource(f"channel '{channel}' is not available on this host.")
     return exc
 
 
@@ -230,7 +234,11 @@ class WindowsEventLogStream:
         rendered = " ".join(
             f"{key}={value}" for key, value in data.items() if value not in (None, "")
         )
-        return f"{provider} event {event_id}: {rendered}" if rendered else f"{provider} event {event_id}"
+        return (
+            f"{provider} event {event_id}: {rendered}"
+            if rendered
+            else f"{provider} event {event_id}"
+        )
 
     def _to_event(
         self,
@@ -292,7 +300,9 @@ class WindowsEventLogStream:
             "timestamp_source": "log_line" if time_created else "collector_observed",
             "collector_source": "windows-eventlog",
         }
-        attributes = {key: value for key, value in attributes.items() if value is not None}
+        attributes = {
+            key: value for key, value in attributes.items() if value is not None
+        }
 
         return Event(
             schema_version="1.0",

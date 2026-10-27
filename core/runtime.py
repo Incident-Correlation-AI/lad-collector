@@ -97,9 +97,7 @@ class StreamMerger:
                 logging.error("[%s] source unavailable: %s", name, exc)
                 break
             except Exception as exc:  # noqa: BLE001 - one bad source must not kill all
-                logging.error(
-                    "[%s] stream failed: %s", name, exc, exc_info=debug
-                )
+                logging.error("[%s] stream failed: %s", name, exc, exc_info=debug)
                 self._stop.wait(backoff)
                 backoff = min(backoff * 2, 60.0)
 

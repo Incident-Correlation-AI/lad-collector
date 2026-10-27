@@ -113,7 +113,9 @@ def get_iso_time(systemd_timestamp: Any = None) -> str:
     microseconds = _int(systemd_timestamp)
     if microseconds is not None:
         try:
-            return datetime.fromtimestamp(microseconds / 1_000_000, tz=timezone.utc).isoformat()
+            return datetime.fromtimestamp(
+                microseconds / 1_000_000, tz=timezone.utc
+            ).isoformat()
         except (OverflowError, OSError, ValueError):
             pass
     return datetime.now(timezone.utc).isoformat()

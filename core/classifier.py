@@ -415,7 +415,9 @@ _KERNEL_NETWORK_PATTERNS = _FIREWALL_MESSAGE_PATTERNS + _LINK_MESSAGE_PATTERNS
 _KERNEL_IDENTIFIERS = frozenset({"kernel", "kern"})
 
 _DB_DEADLOCK = _rx(r"\bdeadlock\b", r"\bdeadlock detected\b")
-_DB_SLOW = _rx(r"\bslow quer", r"\bduration: \d", r"\bquery_time\b", r"\bexceeded.*\bms\b")
+_DB_SLOW = _rx(
+    r"\bslow quer", r"\bduration: \d", r"\bquery_time\b", r"\bexceeded.*\bms\b"
+)
 _DB_CONN = _rx(
     r"\bconnection (?:refused|reset|closed|error)\b",
     r"\bcould not connect\b",
@@ -423,7 +425,11 @@ _DB_CONN = _rx(
     r"\bmax_connections\b",
     r"\bconnection.*\b(?:timeout|timed out)\b",
 )
-_DB_AUTH = _rx(r"\baccess denied for user\b", r"\bauthentication failed\b", r"\bpassword authentication failed\b")
+_DB_AUTH = _rx(
+    r"\baccess denied for user\b",
+    r"\bauthentication failed\b",
+    r"\bpassword authentication failed\b",
+)
 _DB_REPLICATION = _rx(r"\breplicat(?:ion|e|ing)\b", r"\bwal\b", r"\bbinlog\b")
 _DB_RECOVERY = _rx(
     r"\bcrash(?:ed)?\b",
@@ -439,16 +445,21 @@ def _refine_linux_type(category: str, message: str, fallback: str) -> str:
     lowered = text.lower()
 
     if category == CATEGORY_AUTH:
-        if any(word in lowered for word in ("fail", "denied", "invalid", "incorrect", "locked")):
+        if any(
+            word in lowered
+            for word in ("fail", "denied", "invalid", "incorrect", "locked")
+        ):
             return "auth_failure"
-        if any(word in lowered for word in ("accepted", "opened", "new session", "success")):
+        if any(
+            word in lowered for word in ("accepted", "opened", "new session", "success")
+        ):
             return "auth_success"
         return "authorization_event"
 
     if category == CATEGORY_NETWORK:
-        if any(pattern.search(text) for pattern in _FIREWALL_MESSAGE_PATTERNS) or re.search(
-            r"(?i)\b(DROP|REJECT|BLOCK)\b", text
-        ):
+        if any(
+            pattern.search(text) for pattern in _FIREWALL_MESSAGE_PATTERNS
+        ) or re.search(r"(?i)\b(DROP|REJECT|BLOCK)\b", text):
             return "firewall_event"
         if re.search(r"(?i)\b(link (?:is )?(?:up|down)|carrier (?:up|down))\b", text):
             return "network_interface_change"
@@ -500,13 +511,20 @@ def _refine_audit_type(text: str, fallback: str = "audit_event") -> str:
     return fallback
 
 
-def _refine_linux_severity(category: str, event_type: str, message: str, base: str) -> str:
+def _refine_linux_severity(
+    category: str, event_type: str, message: str, base: str
+) -> str:
     if event_type == "auth_failure":
         return "warning"
     if event_type in ("auth_success", "authorization_event"):
         return max_severity(base, "info")
-    if event_type in ("service_failure", "database_deadlock", "database_connection_error",
-                      "database_auth_failure", "audit_denial"):
+    if event_type in (
+        "service_failure",
+        "database_deadlock",
+        "database_connection_error",
+        "database_auth_failure",
+        "audit_denial",
+    ):
         return max_severity(base, "error")
     if event_type in ("firewall_event", "database_slow_query", "audit_log_cleared"):
         return max_severity(base, "warning")
@@ -546,9 +564,13 @@ def classify_linux_record(
     if identifier in _KERNEL_IDENTIFIERS and any(
         pattern.search(message or "") for pattern in _KERNEL_NETWORK_PATTERNS
     ):
-        event_type = "firewall_event" if any(
-            pattern.search(message or "") for pattern in _FIREWALL_MESSAGE_PATTERNS
-        ) else "network_event"
+        event_type = (
+            "firewall_event"
+            if any(
+                pattern.search(message or "") for pattern in _FIREWALL_MESSAGE_PATTERNS
+            )
+            else "network_event"
+        )
         return Classification(
             CATEGORY_NETWORK,
             event_type,
@@ -563,7 +585,9 @@ def classify_linux_record(
     for rule in _LINUX_RULES:
         if rule.matches(identifier, unit, message or "", transport):
             event_type = _refine_linux_type(rule.category, message or "", rule.type)
-            severity = _refine_linux_severity(rule.category, event_type, message or "", base_severity)
+            severity = _refine_linux_severity(
+                rule.category, event_type, message or "", base_severity
+            )
             return Classification(rule.category, event_type, severity, rule.name)
 
     severity = max_severity(base_severity, infer_severity_from_text(message or ""))

@@ -11,13 +11,13 @@ Usage:
     python tools/simulate_attack.py --scenario db_timeout
     python tools/simulate_attack.py --endpoint https://d6l60no0kk.execute-api.eu-north-1.amazonaws.com/api/v1/events/batch --token <TOKEN>
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import os
 import sys
-import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -30,78 +30,90 @@ DEFAULT_ENDPOINT = os.getenv(
 DEFAULT_TOKEN = os.getenv("LAD_COLLECTOR_TOKEN", "")
 
 
-def generate_http_5xx_events(count: int = 25, host: str = "web-srv-prod-01") -> list[dict]:
+def generate_http_5xx_events(
+    count: int = 25, host: str = "web-srv-prod-01"
+) -> list[dict]:
     now = datetime.now(timezone.utc).isoformat()
     events = []
     for i in range(count):
-        events.append({
-            "schema_version": "1.0",
-            "event_id": f"atk-http5xx-{uuid.uuid4().hex[:12]}",
-            "event_ts": now,
-            "observed_ts": now,
-            "host": host,
-            "source": "journald",
-            "service": "web-api",
-            "category": "http",
-            "type": "http_5xx",
-            "severity": "error",
-            "message": "HTTP/1.1 500 Internal Server Error POST /api/checkout upstream timeout",
-            "attributes": {
-                "status_code": 500,
-                "latency_ms": 2450.0 + (i * 15.0),
-                "client_ip": f"192.168.1.{100 + (i % 10)}",
-                "request_path": "/api/checkout",
-            },
-        })
+        events.append(
+            {
+                "schema_version": "1.0",
+                "event_id": f"atk-http5xx-{uuid.uuid4().hex[:12]}",
+                "event_ts": now,
+                "observed_ts": now,
+                "host": host,
+                "source": "journald",
+                "service": "web-api",
+                "category": "http",
+                "type": "http_5xx",
+                "severity": "error",
+                "message": "HTTP/1.1 500 Internal Server Error POST /api/checkout upstream timeout",
+                "attributes": {
+                    "status_code": 500,
+                    "latency_ms": 2450.0 + (i * 15.0),
+                    "client_ip": f"192.168.1.{100 + (i % 10)}",
+                    "request_path": "/api/checkout",
+                },
+            }
+        )
     return events
 
 
-def generate_auth_burst_events(count: int = 15, host: str = "auth-srv-01") -> list[dict]:
+def generate_auth_burst_events(
+    count: int = 15, host: str = "auth-srv-01"
+) -> list[dict]:
     now = datetime.now(timezone.utc).isoformat()
     events = []
     for i in range(count):
-        events.append({
-            "schema_version": "1.0",
-            "event_id": f"atk-authburst-{uuid.uuid4().hex[:12]}",
-            "event_ts": now,
-            "observed_ts": now,
-            "host": host,
-            "source": "journald",
-            "service": "sshd",
-            "category": "auth",
-            "type": "auth_failure",
-            "severity": "warning",
-            "message": f"Failed password for invalid user admin from 10.0.4.{i + 1} port {40000 + i} ssh2",
-            "attributes": {
-                "user": "admin",
-                "source_ip": f"10.0.4.{i + 1}",
-                "auth_method": "password",
-            },
-        })
+        events.append(
+            {
+                "schema_version": "1.0",
+                "event_id": f"atk-authburst-{uuid.uuid4().hex[:12]}",
+                "event_ts": now,
+                "observed_ts": now,
+                "host": host,
+                "source": "journald",
+                "service": "sshd",
+                "category": "auth",
+                "type": "auth_failure",
+                "severity": "warning",
+                "message": f"Failed password for invalid user admin from 10.0.4.{i + 1} port {40000 + i} ssh2",
+                "attributes": {
+                    "user": "admin",
+                    "source_ip": f"10.0.4.{i + 1}",
+                    "auth_method": "password",
+                },
+            }
+        )
     return events
 
 
-def generate_db_timeout_events(count: int = 12, host: str = "db-primary-01") -> list[dict]:
+def generate_db_timeout_events(
+    count: int = 12, host: str = "db-primary-01"
+) -> list[dict]:
     now = datetime.now(timezone.utc).isoformat()
     events = []
     for i in range(count):
-        events.append({
-            "schema_version": "1.0",
-            "event_id": f"atk-dbtimeout-{uuid.uuid4().hex[:12]}",
-            "event_ts": now,
-            "observed_ts": now,
-            "host": host,
-            "source": "file-database-files",
-            "service": "postgres",
-            "category": "db",
-            "type": "database_timeout",
-            "severity": "error",
-            "message": "canceling statement due to statement timeout",
-            "attributes": {
-                "duration_ms": 30000.0,
-                "query": "SELECT * FROM orders FOR UPDATE",
-            },
-        })
+        events.append(
+            {
+                "schema_version": "1.0",
+                "event_id": f"atk-dbtimeout-{uuid.uuid4().hex[:12]}",
+                "event_ts": now,
+                "observed_ts": now,
+                "host": host,
+                "source": "file-database-files",
+                "service": "postgres",
+                "category": "db",
+                "type": "database_timeout",
+                "severity": "error",
+                "message": "canceling statement due to statement timeout",
+                "attributes": {
+                    "duration_ms": 30000.0,
+                    "query": "SELECT * FROM orders FOR UPDATE",
+                },
+            }
+        )
     return events
 
 

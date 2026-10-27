@@ -11,7 +11,10 @@ from collections import deque
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
+
 
 # ==========================================
 # 1. UNIVERSAL CONTRACT MODEL
@@ -20,14 +23,14 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 class Event:
     schema_version: str
     event_id: str
-    event_ts: str       # ISO-8601 UTC string
-    observed_ts: str    # ISO-8601 UTC string
+    event_ts: str  # ISO-8601 UTC string
+    observed_ts: str  # ISO-8601 UTC string
     host: str
-    source: str         # "journald", "windows-eventlog", "file-database-files", ...
+    source: str  # "journald", "windows-eventlog", "file-database-files", ...
     service: Optional[str]
-    category: str       # "auth", "network", "syslog", "service", "system", "db"
-    type: str           # "auth_failure", "firewall_event", "database_deadlock", ...
-    severity: str       # "info", "warning", "error", "critical"
+    category: str  # "auth", "network", "syslog", "service", "system", "db"
+    type: str  # "auth_failure", "firewall_event", "database_deadlock", ...
+    severity: str  # "info", "warning", "error", "critical"
     message: str
     attributes: Dict[str, Any]
     template: Optional[str] = None
@@ -88,11 +91,16 @@ class Redactor:
         ),
         # JWTs.
         (
-            re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
+            re.compile(
+                r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"
+            ),
             "[REDACTED_JWT]",
         ),
         # AWS access key IDs.
-        (re.compile(r"\b(?:AKIA|ASIA|AIDA|AROA)[A-Z0-9]{12,20}\b"), "[REDACTED_AWS_KEY]"),
+        (
+            re.compile(r"\b(?:AKIA|ASIA|AIDA|AROA)[A-Z0-9]{12,20}\b"),
+            "[REDACTED_AWS_KEY]",
+        ),
         # Inline credentials in connection URIs.
         (
             re.compile(
@@ -277,7 +285,9 @@ class BatchSender:
         current_size = envelope_overhead
 
         for event in events:
-            single_payload = json.dumps(asdict(event), separators=(",", ":"), default=str).encode("utf-8")
+            single_payload = json.dumps(
+                asdict(event), separators=(",", ":"), default=str
+            ).encode("utf-8")
             event_size = len(single_payload)
             if current and current_size + event_size + 1 > self.max_batch_bytes:
                 chunks.append(current)
@@ -335,13 +345,13 @@ class BatchSender:
         except urllib.error.HTTPError as exc:
             # 4xx means the payload/auth is wrong; retrying will not help.
             non_retryable = exc.code in (400, 401, 403, 404, 413, 422)
-            logging.error("HTTP %s: %s", exc.code, exc.reason)
+            logging.exception("HTTP %s: %s", exc.code, exc.reason)
             return False, not non_retryable
         except urllib.error.URLError as exc:
-            logging.error("Network error (API unreachable): %s", exc.reason)
+            logging.exception("Network error (API unreachable): %s", exc.reason)
             return False, True
         except (TimeoutError, OSError) as exc:
-            logging.error("Network timeout/error while sending: %s", exc)
+            logging.exception("Network timeout/error while sending: %s", exc)
             return False, True
 
     def send_batch(self, events: List[Event]) -> bool:

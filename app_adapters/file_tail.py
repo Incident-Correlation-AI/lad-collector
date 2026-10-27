@@ -38,7 +38,9 @@ _RFC3164_TIMESTAMP = re.compile(
 )
 
 # auditd records carry a Unix epoch in "msg=audit(1729425296.123:456)".
-_AUDIT_EPOCH = re.compile(r"\bmsg=audit\((?P<seconds>\d{9,})(?:\.(?P<fraction>\d+))?:\d+\)")
+_AUDIT_EPOCH = re.compile(
+    r"\bmsg=audit\((?P<seconds>\d{9,})(?:\.(?P<fraction>\d+))?:\d+\)"
+)
 
 _SEVERITY_LETTERS = {
     "F": "critical",
@@ -188,13 +190,23 @@ def _parse_json_line(line: str) -> Optional[dict[str, Any]]:
     if isinstance(raw_time, str):
         timestamp = parse_log_timestamp(raw_time)
 
-    message = payload.get("msg") or payload.get("message") or payload.get("short_message")
+    message = (
+        payload.get("msg") or payload.get("message") or payload.get("short_message")
+    )
     severity = None
-    letter = payload.get("s") or payload.get("error_severity") or payload.get("severity") \
-        or payload.get("level") or payload.get("lvl")
+    letter = (
+        payload.get("s")
+        or payload.get("error_severity")
+        or payload.get("severity")
+        or payload.get("level")
+        or payload.get("lvl")
+    )
     if isinstance(letter, str):
         normalized = letter.strip().lower()
-        if normalized[:1] in ("f", "e", "w", "i", "d", "t") and normalized[:1].upper() in _SEVERITY_LETTERS:
+        if (
+            normalized[:1] in ("f", "e", "w", "i", "d", "t")
+            and normalized[:1].upper() in _SEVERITY_LETTERS
+        ):
             severity = _SEVERITY_LETTERS[normalized[:1].upper()]
         elif normalized in classifier.SEVERITY_RANK:
             severity = normalized
@@ -327,7 +339,9 @@ class FileTailStream:
             return self._read_new(path)
 
         if state.inode != stat.st_ino or stat.st_size < state.offset:
-            logging.info("[%s] rotation detected for %s; reopening", self.spec.name, path)
+            logging.info(
+                "[%s] rotation detected for %s; reopening", self.spec.name, path
+            )
             state = _FileState(inode=stat.st_ino, offset=0)
             self._states[path] = state
 
@@ -369,7 +383,9 @@ class FileTailStream:
                 if event is not None:
                     yield event
 
-    def _line_to_event(self, path: str, raw: bytes, state: _FileState) -> Optional[Event]:
+    def _line_to_event(
+        self, path: str, raw: bytes, state: _FileState
+    ) -> Optional[Event]:
         state.line_number += 1
         line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
         if not line.strip():

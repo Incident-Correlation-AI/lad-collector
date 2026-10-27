@@ -123,7 +123,9 @@ def windows_channels() -> tuple[WindowsChannelSpec, ...]:
     explicit = env_list("LAD_WINDOWS_CHANNELS")
     if explicit:
         wanted = {channel.lower() for channel in explicit}
-        return tuple(spec for spec in WINDOWS_CHANNELS if spec.channel.lower() in wanted)
+        return tuple(
+            spec for spec in WINDOWS_CHANNELS if spec.channel.lower() in wanted
+        )
 
     enabled = []
     for spec in WINDOWS_CHANNELS:
