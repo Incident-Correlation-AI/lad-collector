@@ -44,6 +44,12 @@ _TIMEOUT_CODES = frozenset({258, 1460})
 _ACCESS_DENIED = 5
 _CHANNEL_NOT_FOUND_CODES = frozenset({15000, 15003, 15007})
 _INVALID_PARAMETER = 87
+# pywin32 raises this from EvtNext once a poll has timed out with no events;
+# the subscription is unusable afterwards, so it must be recreated.
+_INVALID_OPERATION = 4317
+# After this many consecutive idle waits, probe the subscription once rather
+# than trusting the signal event alone (30 x 500 ms = ~15 s).
+_SAFETY_POLL_WAITS = 30
 
 
 def _win_error(exc: BaseException) -> Optional[int]:
@@ -123,6 +129,39 @@ def _close_handle(handle: Any) -> None:
             win32evtlog.EvtClose(handle)
         except Exception:
             pass
+
+
+def _enable_security_privilege() -> bool:
+    """Enable SeSecurityPrivilege for this process.
+
+    ``ReadEventLog`` on the Security channel requires it; administrators hold
+    the privilege but Windows leaves it disabled in the token, so the legacy
+    reader has to enable it explicitly or ``OpenEventLog`` fails with
+    access-denied even in an elevated shell.
+    """
+    try:
+        import win32api
+        import win32con
+        import win32security
+    except ImportError:
+        return False
+
+    try:
+        handle = win32api.GetCurrentProcess()
+        token = win32security.OpenProcessToken(
+            handle, win32security.TOKEN_ADJUST_PRIVILEGES | win32security.TOKEN_QUERY
+        )
+        luid = win32security.LookupPrivilegeValue(None, win32security.SE_SECURITY_NAME)
+        win32security.AdjustTokenPrivileges(
+            token, False, [(luid, win32security.SE_PRIVILEGE_ENABLED)]
+        )
+        if win32api.GetLastError() == win32con.ERROR_NOT_ALL_ASSIGNED:
+            logging.debug("SeSecurityPrivilege is not held by this token")
+            return False
+        return True
+    except Exception as exc:  # noqa: BLE001 - best effort, caller reports access denied
+        logging.debug("could not enable SeSecurityPrivilege: %s", exc)
+        return False
 
 
 def _parse_event_xml(xml: str) -> Optional[dict[str, Any]]:
@@ -362,29 +401,65 @@ class WindowsEventLogStream:
                 _close_handle(metadata)
         self._metadata_cache.clear()
 
+    def _subscribe(self, win32evtlog, signal: Any) -> Any:
+        try:
+            return win32evtlog.EvtSubscribe(
+                ChannelPath=self.channel,
+                Flags=win32evtlog.EvtSubscribeToFutureEvents,
+                SignalEvent=signal,
+                Query=self.query or "*",
+            )
+        except Exception as exc:
+            raise _translate_subscribe_error(exc, self.channel)
+
     def _iter_modern(self, win32evtlog, win32event) -> Iterator[Event]:
         signal = win32event.CreateEvent(None, 0, 0, None)
+        subscription = None
         try:
-            try:
-                subscription = win32evtlog.EvtSubscribe(
-                    ChannelPath=self.channel,
-                    Flags=win32evtlog.EvtSubscribeToFutureEvents,
-                    SignalEvent=signal,
-                    Query=self.query or "*",
-                )
-            except Exception as exc:
-                raise _translate_subscribe_error(exc, self.channel)
+            subscription = self._subscribe(win32evtlog, signal)
 
             try:
+                idle_waits = 0
                 while True:
+                    # Wait for the subscription's signal instead of polling with
+                    # a timeout.  Once EvtNext() times out with an empty result,
+                    # pywin32 leaves the subscription unusable and every later
+                    # call fails with WinError 4317, which previously forced an
+                    # immediate (and permanent) fallback to the legacy reader on
+                    # any quiet channel.
+                    safety_poll = False
+                    if (
+                        win32event.WaitForSingleObject(signal, self.poll_timeout_ms)
+                        == win32event.WAIT_OBJECT_0
+                    ):
+                        idle_waits = 0
+                    else:
+                        idle_waits += 1
+                        if idle_waits < _SAFETY_POLL_WAITS:
+                            continue
+                        idle_waits = 0
+                        safety_poll = True
+
                     try:
-                        handles = win32evtlog.EvtNext(
-                            subscription, self.batch_size, self.poll_timeout_ms, 0
-                        )
+                        handles = win32evtlog.EvtNext(subscription, self.batch_size, 0, 0)
                     except Exception as exc:
-                        if _win_error(exc) in _TIMEOUT_CODES:
+                        code = _win_error(exc)
+                        if code in _TIMEOUT_CODES:
+                            continue
+                        if code == _INVALID_OPERATION:
+                            # Recover the poisoned subscription.  The previous
+                            # poll reported no pending events, so re-subscribing
+                            # does not skip anything.
+                            _close_handle(subscription)
+                            subscription = self._subscribe(win32evtlog, signal)
                             continue
                         raise
+
+                    if not handles and safety_poll:
+                        # An empty EvtNext() poisons the subscription, so never
+                        # leave one in that state after a safety poll.
+                        _close_handle(subscription)
+                        subscription = self._subscribe(win32evtlog, signal)
 
                     for handle in handles or ():
                         parsed = None
@@ -434,6 +509,11 @@ class WindowsEventLogStream:
             import win32evtlogutil
         except ImportError:
             win32evtlogutil = None
+
+        if self.channel.lower() == "security":
+            # ReadEventLog on the Security channel needs SeSecurityPrivilege;
+            # administrators hold it but Windows keeps it disabled by default.
+            _enable_security_privilege()
 
         try:
             handle = win32evtlog.OpenEventLog(None, self.channel)
