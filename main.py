@@ -17,6 +17,7 @@ from .core.engine import BatchSender, BoundedBuffer, Flusher, Redactor
 DEFAULT_AWS_ENDPOINT = (
     "https://d6l60no0kk.execute-api.eu-north-1.amazonaws.com/api/v1/events/batch"
 )
+DEFAULT_AWS_TOKEN = "n58cgZShSdD9d9zj9XbwfOkFuiRHTdDp-SxQCVx1LFQ"
 
 
 def _resolve_collector_token() -> str:
@@ -32,7 +33,7 @@ def _resolve_collector_token() -> str:
                         return line.strip().split("=", 1)[1]
         except Exception:
             pass
-    return token or "dev-secret-token"
+    return DEFAULT_AWS_TOKEN
 
 
 # Configurable settings (override with environment variables).
